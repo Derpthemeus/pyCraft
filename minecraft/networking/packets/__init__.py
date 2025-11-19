@@ -45,15 +45,11 @@ from .serverbound.login import get_packets as state_login_serverbound
 from .keep_alive_packet import KeepAlivePacket
 from .clientbound.play import KeepAlivePacket as KeepAlivePacketClientbound
 from .serverbound.play import KeepAlivePacket as KeepAlivePacketServerbound
-from .clientbound.play import JoinGamePacket
 from .clientbound.play import ChatMessagePacket
-from .clientbound.play import PlayerPositionAndLookPacket
 from .clientbound.play import DisconnectPacket as DisconnectPacketPlayState
 from .clientbound.play import (
     SetCompressionPacket as SetCompressionPacketPlayState
 )
-from .clientbound.play import PlayerListItemPacket
-from .clientbound.play import MapPacket
 from .clientbound.play import get_packets as state_playing_clientbound
 from .serverbound.play import ChatPacket
 from .serverbound.play import PositionAndLookPacket

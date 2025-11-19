@@ -1,7 +1,7 @@
 from minecraft.networking.packets import Packet
 
 from minecraft.networking.types import (
-    VarInt, Boolean, String, VarIntPrefixedByteArray, TrailingByteArray
+    VarInt, Boolean, String, VarIntPrefixedByteArray, TrailingByteArray, UUID
 )
 
 
@@ -15,6 +15,10 @@ def get_packets(context):
         packets |= {
             PluginResponsePacket
         }
+    if context.protocol_later_eq(773):
+        packets |= {
+            LoginAcknowledgedPacket
+        }
     return packets
 
 
@@ -27,7 +31,9 @@ class LoginStartPacket(Packet):
 
     packet_name = "login start"
     definition = [
-        {'name': String}]
+        {'name': String},
+        {'uuid': UUID}
+    ]
 
 
 class EncryptionResponsePacket(Packet):
@@ -56,7 +62,6 @@ class PluginResponsePacket(Packet):
     packet_name = 'login plugin response'
     fields = (
         'message_id',  # str
-        'successful',  # bool
         'data',        # bytes, or None if 'successful' is False
     )
 
@@ -75,3 +80,12 @@ class PluginResponsePacket(Packet):
         Boolean.send(successful, packet_buffer)
         if successful:
             TrailingByteArray.send(self.data, packet_buffer)
+
+
+class LoginAcknowledgedPacket(Packet):
+    @staticmethod
+    def get_id(context):
+        return 0x03
+
+    packet_name = "login acknowledged"
+    definition = []

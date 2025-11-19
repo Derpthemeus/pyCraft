@@ -37,7 +37,8 @@ def get_packets(context):
 class KeepAlivePacket(AbstractKeepAlivePacket):
     @staticmethod
     def get_id(context):
-        return 0x0F if context.protocol_later_eq(755) else \
+        return 0x1B if context.protocol_later_eq(773) else \
+               0x0F if context.protocol_later_eq(755) else \
                0x10 if context.protocol_later_eq(712) else \
                0x0F if context.protocol_later_eq(471) else \
                0x10 if context.protocol_later_eq(464) else \

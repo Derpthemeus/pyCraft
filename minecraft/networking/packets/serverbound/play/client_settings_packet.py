@@ -11,7 +11,8 @@ from minecraft.utility import attribute_transform
 class ClientSettingsPacket(Packet):
     @staticmethod
     def get_id(context):
-        return 0x05 if context.protocol_later_eq(464) else \
+        return 0x0D if context.protocol_later_eq(773) else \
+               0x05 if context.protocol_later_eq(464) else \
                0x04 if context.protocol_later_eq(389) else \
                0x03 if context.protocol_later_eq(343) else \
                0x04 if context.protocol_later_eq(336) else \
@@ -34,27 +35,15 @@ class ClientSettingsPacket(Packet):
             {'enable_text_filtering': Boolean}
             if context.protocol_later_eq(757) else
             {'disable_text_filtering': Boolean}
-            if context.protocol_later_eq(755) else {},
+            if (context.protocol_later_eq(755) and not context.protocol_later_eq(773)) else {},
 
             {'allow_server_listings': Boolean}
             if context.protocol_later_eq(755) else {},
+
+            {'particle_status': VarInt}
+            if context.protocol_later_eq(773) else {},
         ]
 
-    # Set a default value for 'enable_text_filtering', because most clients
-    # will probably want this value, and to avoid breaking old code.
-    enable_text_filtering = False
-
-    # To support the possibility of both 'enable_text_filtering' and
-    # 'disable_text_filtering' fields existing, make 'disable_text_filtering'
-    # (which is the less likely to be used of the two) into a property that
-    # stores the negation of its value in the ordinary attribute
-    # 'enable_text_filtering'.
-    disable_text_filtering = attribute_transform(
-        'enable_text_filtering', operator.not_, operator.not_)
-
-    # Set a default value for 'allow_server_listings', because most clients
-    # will probably want this value, and to avoid breaking old code.
-    allow_server_listings = False
 
     field_enum = classmethod(
         lambda cls, field, context: {

@@ -97,12 +97,6 @@ def main():
         connection.register_packet_listener(
             print_outgoing, Packet, outgoing=True)
 
-    def handle_join_game(join_game_packet):
-        print('Connected.')
-
-    connection.register_packet_listener(
-        handle_join_game, clientbound.play.JoinGamePacket)
-
     def print_chat(chat_packet):
         print("Message (%s): %s" % (
             chat_packet.field_string('position'), chat_packet.json_data))

@@ -8,9 +8,12 @@ import select
 import sys
 import json
 import re
+import uuid
 
-from .types import VarInt
+from .types import VarInt, PrefixedArray
 from .packets import clientbound, serverbound
+from .packets.clientbound import configuration as clientbound_configuration
+from .packets.serverbound import configuration as serverbound_configuration
 from . import packets, encryption
 from .. import (
     utility, KNOWN_MINECRAFT_VERSIONS, SUPPORTED_MINECRAFT_VERSIONS,
@@ -23,6 +26,7 @@ from ..exceptions import (
 
 STATE_STATUS = 1
 STATE_PLAYING = 2
+STATE_CONFIGURATION = 3
 
 
 class ConnectionContext(object):
@@ -173,6 +177,8 @@ class Connection(object):
         self.options.port = port
         self.auth_token = auth_token
         self.username = username
+        # FIXME make a way to set this
+        self.uuid = str(uuid.uuid4())
         self.connected = False
 
         self.handle_exception = handle_exception
@@ -335,6 +341,8 @@ class Connection(object):
             for listener in self.early_outgoing_packet_listeners:
                 listener.call_packet(packet)
 
+            print(f"Writing packet with id=0x{packet.id:02X} ({packet.packet_name})")
+
             if self.options.compression_enabled:
                 packet.write(self.socket, self.options.compression_threshold)
             else:
@@ -407,8 +415,11 @@ class Connection(object):
                 login_start_packet = serverbound.login.LoginStartPacket()
                 if self.auth_token:
                     login_start_packet.name = self.auth_token.profile.name
+                    # FIXME no idea if this is the right field
+                    login_start_packet.uuid = self.auth_token.profile.id_
                 else:
                     login_start_packet.name = self.username
+                    login_start_packet.uuid = self.uuid
                 self.write_packet(login_start_packet)
                 self.reactor = LoginReactor(self)
             else:
@@ -687,11 +698,12 @@ class PacketReactor(object):
                     packet_data.reset_cursor()
 
             packet_id = VarInt.read(packet_data)
-
+            # print(f"Read packet with id=0x{packet_id:02X} length={length}")
             # If we know the structure of the packet, attempt to parse it
             # otherwise, just return an instance of the base Packet class.
             if packet_id in self.clientbound_packets:
                 packet = self.clientbound_packets[packet_id]()
+                print(f"Packet 0x{packet_id:02X} -> {packet.__class__.__name__} (packet_name='{packet.packet_name}')")
                 packet.context = self.connection.context
                 packet.read(packet_data)
             else:
@@ -769,7 +781,13 @@ class LoginReactor(PacketReactor):
                                   'with: "%s".' % msg)
 
         elif packet.packet_name == "login success":
-            self.connection.reactor = PlayingReactor(self.connection)
+            if self.connection.context.protocol_later_eq(773):
+                self.connection.write_packet(
+                    serverbound.login.LoginAcknowledgedPacket(), force=True)
+                self.connection.reactor = ConfigurationReactor(self.connection)
+                self.connection.write_packet(serverbound_configuration.ClientInformationPacket(), force=True)
+            else:
+                self.connection.reactor = PlayingReactor(self.connection)
 
         elif packet.packet_name == "set compression":
             self.connection.options.compression_threshold = packet.threshold
@@ -779,6 +797,34 @@ class LoginReactor(PacketReactor):
             self.connection.write_packet(
                 serverbound.login.PluginResponsePacket(
                     message_id=packet.message_id, successful=False))
+
+
+class ConfigurationReactor(PacketReactor):
+    get_clientbound_packets = staticmethod(clientbound_configuration.get_packets)
+
+    def react(self, packet):
+        if packet.packet_name == "keep alive (configuration)":
+            keep_alive_packet = serverbound_configuration.KeepAlivePacket()
+            keep_alive_packet.keep_alive_id = packet.keep_alive_id
+            self.connection.write_packet(keep_alive_packet)
+
+        elif packet.packet_name == "ping (configuration)":
+            pong_packet = serverbound_configuration.PongPacket()
+            pong_packet.id = packet.id
+            self.connection.write_packet(pong_packet)
+
+        elif packet.packet_name == "clientbound known packs":
+            self.connection.write_packet(
+                serverbound_configuration.ServerBoundKnownPacksPacket())
+
+        elif packet.packet_name == "finish configuration":
+            self.connection.reactor = PlayingReactor(self.connection)
+            self.connection.write_packet(
+                serverbound_configuration.AcknowledgeFinishConfigurationPacket(),
+                force=True)
+
+        elif packet.packet_name == "disconnect (configuration)":
+            self.connection.disconnect()
 
 
 class PlayingReactor(PacketReactor):
