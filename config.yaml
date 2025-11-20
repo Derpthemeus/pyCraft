@@ -1,0 +1,5 @@
+hostname: "localhost"
+port: 25565
+accounts:
+  - name: BUS
+  - name: FS
