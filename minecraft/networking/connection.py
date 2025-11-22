@@ -9,6 +9,7 @@ import sys
 import json
 import re
 import uuid
+from datetime import datetime
 
 from .types import VarInt, PrefixedArray
 from .packets import clientbound, serverbound
@@ -85,6 +86,7 @@ class Connection(object):
         port=25565,
         auth_token=None,
         username=None,
+        uuid=None,
         initial_version=None,
         allowed_versions=None,
         handle_exception=None,
@@ -102,6 +104,7 @@ class Connection(object):
                            object. If None, no authentication is attempted and
                            the server is assumed to be running in offline mode.
         :param username: Username string; only applicable in offline mode.
+        :param uuid: UUID string; only applicable in offline mode.
         :param initial_version: A Minecraft version ID string or protocol
                                 version number to use if the server's protocol
                                 version cannot be determined. (Although it is
@@ -177,8 +180,7 @@ class Connection(object):
         self.options.port = port
         self.auth_token = auth_token
         self.username = username
-        # FIXME make a way to set this
-        self.uuid = str(uuid.uuid4())
+        self.uuid = uuid
         self.connected = False
 
         self.handle_exception = handle_exception
@@ -341,7 +343,7 @@ class Connection(object):
             for listener in self.early_outgoing_packet_listeners:
                 listener.call_packet(packet)
 
-            print(f"Writing packet with id=0x{packet.id:02X} ({packet.packet_name})")
+            print(f"[{str(datetime.now().time())}][{self.username}] Writing packet with id=0x{packet.id:02X} ({packet.packet_name})")
 
             if self.options.compression_enabled:
                 packet.write(self.socket, self.options.compression_threshold)
@@ -703,7 +705,7 @@ class PacketReactor(object):
             # otherwise, just return an instance of the base Packet class.
             if packet_id in self.clientbound_packets:
                 packet = self.clientbound_packets[packet_id]()
-                print(f"Packet 0x{packet_id:02X} -> {packet.__class__.__name__} (packet_name='{packet.packet_name}')")
+                print(f"[{str(datetime.now().time())}][{self.connection.username}] Packet 0x{packet_id:02X} -> {packet.__class__.__name__} (packet_name='{packet.packet_name}')")
                 packet.context = self.connection.context
                 packet.read(packet_data)
             else:
@@ -806,7 +808,7 @@ class ConfigurationReactor(PacketReactor):
         if packet.packet_name == "keep alive (configuration)":
             keep_alive_packet = serverbound_configuration.KeepAlivePacket()
             keep_alive_packet.keep_alive_id = packet.keep_alive_id
-            self.connection.write_packet(keep_alive_packet)
+            self.connection.write_packet(keep_alive_packet, force=True)
 
         elif packet.packet_name == "ping (configuration)":
             pong_packet = serverbound_configuration.PongPacket()
@@ -838,7 +840,7 @@ class PlayingReactor(PacketReactor):
         elif packet.packet_name == "keep alive":
             keep_alive_packet = serverbound.play.KeepAlivePacket()
             keep_alive_packet.keep_alive_id = packet.keep_alive_id
-            self.connection.write_packet(keep_alive_packet)
+            self.connection.write_packet(keep_alive_packet, force=True)
 
         elif packet.packet_name == "player position and look":
             if self.connection.context.protocol_later_eq(107):
